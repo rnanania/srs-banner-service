@@ -5,15 +5,49 @@ service: srs-banner-service
 
 provider:
   name: aws
-  runtime: nodejs20.x
+  region: us-east-1
+  runtime: nodejs24.x
+  environment:
+    BANNER_BUCKET_NAME: ${self:service}-${sls:stage}-${aws:accountId}-banner-bucket
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+          Resource:
+            - arn:aws:s3:::${self:provider.environment.BANNER_BUCKET_NAME}/*
   # Uncomment to easily set up a custom domain. Read the docs for more details:
   # https://www.serverless.com/framework/docs/providers/aws/guide/domains
   # domain: api.example.com
 
 functions:
-  hello:
-    handler: handler.hello
+  getUploadUrl:
+    handler: handlers/getUploadUrl.handler
     events:
       - httpApi:
-          path: /
-          method: get
+          path: /upload-url
+          method: post
+
+resources:
+  Resources:
+    BannerBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.BANNER_BUCKET_NAME}
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          IgnorePublicAcls: true
+          BlockPublicPolicy: false
+          RestrictPublicBuckets: false
+    BannerBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref BannerBucket
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal: "*"
+              Action: s3:GetObject
+              Resource: arn:aws:s3:::${self:provider.environment.BANNER_BUCKET_NAME}/*
