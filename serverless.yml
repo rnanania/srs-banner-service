@@ -9,6 +9,7 @@ provider:
   runtime: nodejs24.x
   environment:
     BANNER_BUCKET_NAME: ${self:service}-${sls:stage}-${aws:accountId}-banner-bucket
+    BANNERS_TABLE_NAME: ${self:service}-${sls:stage}-banners
   iam:
     role:
       statements:
@@ -17,6 +18,19 @@ provider:
             - s3:PutObject
           Resource:
             - arn:aws:s3:::${self:provider.environment.BANNER_BUCKET_NAME}/*
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+          Resource:
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.BANNERS_TABLE_NAME}
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource:
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.BANNERS_TABLE_NAME}
   # Uncomment to easily set up a custom domain. Read the docs for more details:
   # https://www.serverless.com/framework/docs/providers/aws/guide/domains
   # domain: api.example.com
@@ -28,6 +42,13 @@ functions:
       - httpApi:
           path: /upload-url
           method: post
+  confirmUpload:
+    handler: handlers/confirmUpload.handler
+    events:
+      - s3:
+          bucket: ${self:provider.environment.BANNER_BUCKET_NAME}
+          event: s3:ObjectCreated:*
+          existing: true
 
 resources:
   Resources:
@@ -51,3 +72,14 @@ resources:
               Principal: "*"
               Action: s3:GetObject
               Resource: arn:aws:s3:::${self:provider.environment.BANNER_BUCKET_NAME}/*
+    BannersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.BANNERS_TABLE_NAME}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: fileName
+            AttributeType: S
+        KeySchema:
+          - AttributeName: fileName
+            KeyType: HASH
